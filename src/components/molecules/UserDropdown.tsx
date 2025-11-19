@@ -149,24 +149,23 @@ export function GuestDropdown({
           role="menu"
           className="absolute right-0 top-full mt-2 w-56 rounded-md border bg-white shadow-lg z-50"
         >
-          <button
-            onClick={onSignIn}
-            className="block w-full text-left px-4 py-2 hover:bg-gray-50"
-          >
-            Sign in
-          </button>
-          <button
-            onClick={onSignUp}
-            className="block w-full text-left px-4 py-2 hover:bg-gray-50"
-          >
-            Create account
-          </button>
-          <Link
-            href="/forgot-password"
-            className="block px-4 py-2 hover:bg-gray-50"
-          >
-            Forgot password
-          </Link>
+          {onSignIn ? (
+            <button
+              onClick={onSignIn}
+              className="block w-full text-left px-4 py-2 hover:bg-gray-50"
+            >
+              Sign in
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="block px-4 py-2 hover:bg-gray-50"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       )}
     </div>
