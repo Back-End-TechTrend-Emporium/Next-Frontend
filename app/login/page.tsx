@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -107,15 +108,23 @@ export default function LoginPage() {
             }
           />
 
-          <label className="flex items-center mt-2 select-none">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm">Remember me</span>
-          </label>
+          <div className="flex items-center justify-between mt-2">
+            <label className="flex items-center select-none text-sm">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="mr-2"
+              />
+              <span>Remember me</span>
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-sm text-gray-500 hover:underline"
+            >
+              Forgot Password ?
+            </Link>
+          </div>
 
           {error && (
             <div className="text-red-600 mt-2" role="alert">
@@ -130,6 +139,13 @@ export default function LoginPage() {
           >
             {isLoading ? "Logging in..." : "Login"}
           </Button>
+
+          <p className="text-center text-sm mt-4 text-gray-500">
+            Don’t have an Account ?{" "}
+            <Link href="/register" className="font-semibold hover:underline">
+              Register
+            </Link>
+          </p>
         </form>
 
         <div className="hidden lg:flex lg:col-span-7 items-center justify-center">
