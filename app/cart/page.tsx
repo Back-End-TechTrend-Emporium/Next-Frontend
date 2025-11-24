@@ -6,15 +6,19 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthContext";
 import { Cart, CartService } from "@/components/lib/CartService";
 
-
 export default function Page() {
   const router = useRouter();
   const { user } = useAuth();
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const fmt = useMemo(() => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }), []);
+  const fmt = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }),
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -24,7 +28,7 @@ export default function Page() {
       setLoading(false);
       return;
     }
-    CartService.getMine()
+    CartService.getActive()
       .then((data) => {
         if (active) setCart(data);
       })
@@ -39,11 +43,27 @@ export default function Page() {
     };
   }, [user]);
 
+  const handleCheckout = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await CartService.checkout();
+      router.push("/my-orders");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16">
-        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">Inicia sesión para ver tu carrito</div>
-        <button onClick={() => router.push("/login")} className="rounded-lg bg-black px-4 py-2 text-white">
+        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">
+          Inicia sesión para ver tu carrito
+        </div>
+        <button
+          onClick={() => router.push("/login")}
+          className="rounded-lg bg-black px-4 py-2 text-white"
+        >
           Ir a iniciar sesión
         </button>
       </div>
@@ -61,8 +81,13 @@ export default function Page() {
   if (error) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16">
-        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">{error}</div>
-        <button onClick={() => router.refresh()} className="rounded-lg bg-black px-4 py-2 text-white">
+        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+        <button
+          onClick={() => router.refresh()}
+          className="rounded-lg bg-black px-4 py-2 text-white"
+        >
           Reintentar
         </button>
       </div>
@@ -83,22 +108,34 @@ export default function Page() {
       <h1 className="mb-6 text-2xl font-semibold">Tu carrito</h1>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4 lg:col-span-2">
           {cart.items.map((it) => (
-            <div key={it.productId} className="flex items-center gap-4 rounded-xl border p-4">
+            <div
+              key={it.productId}
+              className="flex items-center gap-4 rounded-xl border p-4"
+            >
               <div className="relative h-20 w-20 overflow-hidden rounded-lg bg-zinc-100">
                 {it.productImage ? (
-                  <Image src={it.productImage} alt={it.productTitle} fill className="object-cover" />
+                  <Image
+                    src={it.productImage}
+                    alt={it.productTitle}
+                    fill
+                    className="object-cover"
+                  />
                 ) : (
                   <div className="h-full w-full" />
                 )}
               </div>
               <div className="flex-1">
                 <div className="font-medium">{it.productTitle}</div>
-                <div className="text-sm text-zinc-600">Cantidad: {it.quantity}</div>
+                <div className="text-sm text-zinc-600">
+                  Cantidad: {it.quantity}
+                </div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-zinc-600">{fmt.format(it.unitPrice)} c/u</div>
+                <div className="text-sm text-zinc-600">
+                  {fmt.format(it.unitPrice)} c/u
+                </div>
                 <div className="font-semibold">{fmt.format(it.totalPrice)}</div>
               </div>
             </div>
@@ -112,7 +149,11 @@ export default function Page() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-zinc-600">Descuento</span>
-            <span>{fmt.format((cart.totalBeforeDiscount ?? 0) - (cart.totalAfterDiscount ?? 0))}</span>
+            <span>
+              {fmt.format(
+                (cart.totalBeforeDiscount ?? 0) - (cart.totalAfterDiscount ?? 0)
+              )}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-zinc-600">Envío</span>
@@ -124,7 +165,13 @@ export default function Page() {
             <span>{fmt.format(cart.finalTotal ?? 0)}</span>
           </div>
           <div className="text-sm text-zinc-500">Estado: {cart.status}</div>
-          <button className="mt-2 w-full rounded-lg bg-black px-4 py-2 text-white">Continuar</button>
+          <button
+            onClick={handleCheckout}
+            disabled={submitting}
+            className="mt-2 w-full rounded-lg bg-black px-4 py-2 text-white disabled:opacity-60"
+          >
+            {submitting ? "Procesando…" : "Continuar"}
+          </button>
         </aside>
       </div>
     </div>

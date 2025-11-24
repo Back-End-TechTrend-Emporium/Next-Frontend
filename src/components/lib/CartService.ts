@@ -26,49 +26,77 @@ export type Cart = {
   createdAt: string;
   updatedAt: string;
   status: string;
+  shippingAddress?: string;
 };
 
-const getToken = () =>
+const token = () =>
   localStorage.getItem("jwt_token") ||
   sessionStorage.getItem("jwt_token") ||
   localStorage.getItem("tte_token") ||
   "";
 
-const onLoginPage = () =>
-  typeof window !== "undefined" && /^\/login(?:\/|$)/i.test(window.location.pathname);
-
-const authHeader = () => {
-  const t = getToken();
+const auth = () => {
+  const t = token();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
 
+const onLoginPage = () =>
+  typeof window !== "undefined" && /^\/login(?:\/|$)/i.test(window.location.pathname);
+
+const asDate = (v?: string) => (v ? new Date(v) : new Date(0));
+
+type MineOptions = { onlyOrders?: boolean; from?: Date; to?: Date };
+
 export const CartService = {
-  getMine: async (): Promise<Cart | null> => {
+  getActive: async (): Promise<Cart | null> => {
     if (onLoginPage()) return null;
-    const t = getToken();
-    if (!t) return null;
-    const res = await http.get<Cart>(`${CART}/my-carts`, { headers: authHeader() });
+    if (!token()) return null;
+    const res = await http.get<Cart>(`${CART}/active`, { headers: auth() });
     return res.data ?? null;
   },
-  getAllMine: async (): Promise<Cart[]> => {
+  getAllMine: async (opts: MineOptions = {}): Promise<Cart[]> => {
     if (onLoginPage()) return [];
-    const t = getToken();
-    if (!t) return [];
-    const res = await http.get<Cart[]>(`${CART}/my-carts`, { headers: authHeader() });
-    return Array.isArray(res.data) ? res.data : [];
+    if (!token()) return [];
+    const res = await http.get<Cart[]>(`${CART}/my-carts`, { headers: auth() });
+    const list = Array.isArray(res.data) ? res.data : [];
+    const onlyOrders = opts.onlyOrders ?? false;
+    const from = opts.from;
+    const to = opts.to;
+    const filtered = list.filter((x) => {
+      if (onlyOrders && (!x.status || x.status === "Active")) return false;
+      if (from && asDate(x.createdAt) < from) return false;
+      if (to && asDate(x.createdAt) > to) return false;
+      return true;
+    });
+    return filtered.sort((a, b) => asDate(b.createdAt).getTime() - asDate(a.createdAt).getTime());
   },
   addItem: async (productId: string, quantity = 1): Promise<Cart | null> => {
     if (onLoginPage()) return null;
-    const t = getToken();
-    if (!t) return null;
-    const res = await http.post<Cart>(`${CART}/add-item`, { productId, quantity }, { headers: authHeader() });
+    if (!token()) return null;
+    const res = await http.post<Cart>(`${CART}/add-item`, { productId, quantity }, { headers: auth() });
+    return res.data ?? null;
+  },
+  updateItem: async (productId: string, quantity: number): Promise<Cart | null> => {
+    if (onLoginPage()) return null;
+    if (!token()) return null;
+    const res = await http.put<Cart>(`${CART}/update-item`, { productId, quantity }, { headers: auth() });
     return res.data ?? null;
   },
   removeItem: async (productId: string): Promise<Cart | null> => {
     if (onLoginPage()) return null;
-    const t = getToken();
-    if (!t) return null;
-    const res = await http.post<Cart>(`${CART}/remove-item`, { productId }, { headers: authHeader() });
+    if (!token()) return null;
+    const res = await http.delete<Cart>(`${CART}/remove-item/${productId}`, { headers: auth() });
     return res.data ?? null;
+  },
+  checkout: async (): Promise<Cart | null> => {
+    if (onLoginPage()) return null;
+    if (!token()) return null;
+    const res = await http.post<Cart>(`${CART}/checkout`, {}, { headers: auth() });
+    return res.data ?? null;
+  },
+  clear: async (): Promise<void> => {
+    if (onLoginPage()) return;
+    if (!token()) return;
+    await http.post(`${CART}/clear`, {}, { headers: auth() });
   },
 };

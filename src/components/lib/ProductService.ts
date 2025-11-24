@@ -71,18 +71,13 @@ export type PagedProductsResponse = {
 async function checkDuplicateServerSide(title: string, categoryIdOrName?: string): Promise<boolean> {
   const titleQ = encodeURIComponent(title.trim());
   try {
-    // Use the exact endpoint: GET /api/store/products?title={title}&page=1&pageSize=12
     const url = `${STORE}/products?title=${titleQ}&page=1&pageSize=12`;
     const res = await http.get<PagedProductsResponse>(url);
     if (Array.isArray(res.data?.items) && res.data.items.length > 0) {
-      // If we have a category to check, verify it matches
       if (categoryIdOrName) {
         const catLower = categoryIdOrName.toLowerCase();
-        return res.data.items.some((p) => 
-          p.category?.toString().toLowerCase() === catLower
-        );
+        return res.data.items.some((p) => p.category?.toString().toLowerCase() === catLower);
       }
-      // Otherwise, any match means duplicate
       return true;
     }
     return false;
@@ -91,12 +86,42 @@ async function checkDuplicateServerSide(title: string, categoryIdOrName?: string
   }
 }
 
-function normalizeDetail(p: any): ProductDetail {
+function deepUnwrap(x: any): any {
+  let v = x;
+  let i = 0;
+  while (v && typeof v === "object" && i < 6) {
+    if ("data" in v) v = v.data;
+    else if ("result" in v) v = v.result;
+    else if ("value" in v) v = v.value;
+    else if ("item" in v) v = v.item;
+    else if ("product" in v) v = v.product;
+    else break;
+    i++;
+  }
+  if (Array.isArray(v)) v = v[0];
+  return v ?? {};
+}
+
+function asBool(v: any) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v.trim().toLowerCase() === "true";
+  if (typeof v === "number") return v !== 0;
+  return false;
+}
+
+function normalizeDetail(raw: any): ProductDetail {
+  const p = deepUnwrap(raw);
   const rate = typeof p.rating === "number" ? p.rating : p.rating?.rate ?? 0;
   const count = typeof p.rating === "object" ? p.rating?.count ?? 0 : p.ratingCount ?? 0;
-  const invTotal = Number(p.inventoryTotal ?? p.inventory ?? 0);
-  const invAvail = Number(p.inventoryAvailable ?? p.inventory ?? 0);
-  const inStock = invAvail > 0;
+  const invTotal = Number(p.inventoryTotal ?? p.inventory ?? p.stock ?? 0);
+  const invAvail = Number(p.inventoryAvailable ?? p.availableInventory ?? p.inventory ?? p.stock ?? 0);
+  const explicitIn = typeof p.isInStock !== "undefined" ? asBool(p.isInStock) : typeof p.available !== "undefined" ? asBool(p.available) : null;
+  const explicitOut = typeof p.isOutOfStock !== "undefined" ? asBool(p.isOutOfStock) : null;
+  const inferred = invAvail > 0;
+  const isInStock = explicitIn ?? (explicitOut !== null ? !explicitOut : inferred);
+  const isOutOfStock = !isInStock;
+  const isLowStock = isInStock && invAvail > 0 && invAvail <= 5;
+
   return {
     id: String(p.id ?? ""),
     title: String(p.title ?? p.name ?? ""),
@@ -107,10 +132,46 @@ function normalizeDetail(p: any): ProductDetail {
     rating: { rate: Number(rate), count: Number(count) },
     inventoryTotal: invTotal,
     inventoryAvailable: invAvail,
-    isLowStock: inStock && invAvail <= 5,
-    isOutOfStock: !inStock,
-    isInStock: inStock,
+    isLowStock,
+    isOutOfStock,
+    isInStock,
   };
+}
+
+function normalizeListItem(p: any): Product {
+  return {
+    id: String(p.id ?? ""),
+    title: String(p.title ?? p.name ?? ""),
+    price: Number(p.price ?? 0),
+    category: String(p.category ?? p.categoryName ?? ""),
+    image: String(p.image ?? p.imageUrl ?? ""),
+    description: String(p.description ?? ""),
+    rating:
+      typeof p.rating === "object"
+        ? { rate: Number(p.rating?.rate ?? 0), count: Number(p.rating?.count ?? 0) }
+        : { rate: Number(p.rating ?? 0), count: Number(p.ratingCount ?? 0) },
+    inventory: Number(p.inventory ?? p.inventoryAvailable ?? 0),
+    status: p.status as ProductStatus | undefined,
+  };
+}
+
+export type SearchParams = {
+  q?: string;
+  categoryId?: string;
+  category?: string;
+  min?: number;
+  max?: number;
+  sort?: "price_asc" | "price_desc" | "latest" | "bestsellers" | "";
+  page?: number;
+  pageSize?: number;
+};
+
+function mapSort(sort?: SearchParams["sort"]): { sortBy?: string; sortDir?: "Asc" | "Desc" } {
+  if (sort === "price_asc") return { sortBy: "Price", sortDir: "Asc" };
+  if (sort === "price_desc") return { sortBy: "Price", sortDir: "Desc" };
+  if (sort === "latest") return { sortBy: "Title", sortDir: "Desc" };
+  if (sort === "bestsellers") return { sortBy: "Rating", sortDir: "Desc" };
+  return {};
 }
 
 export const ProductService = {
@@ -122,33 +183,35 @@ export const ProductService = {
 
   getProducts: async (page = 1, pageSize = 12): Promise<PagedProductsResponse> => {
     const res = await http.get<PagedProductsResponse>(`${STORE}/products?page=${page}&pageSize=${pageSize}`);
-    return res.data;
+    const items = Array.isArray(res.data?.items) ? res.data.items.map(normalizeListItem) : [];
+    return { ...res.data, items };
   },
 
   getLatestProducts: async (): Promise<Product[]> => {
-    const res = await http.get<PagedProductsResponse>(
-      `${STORE}/products?page=1&pageSize=6&sortBy=Title&sortDir=Desc`
-    );
-    return res.data.items;
+    const res = await http.get<PagedProductsResponse>(`${STORE}/products?page=1&pageSize=6&sortBy=Title&sortDir=Desc`);
+    return (res.data.items ?? []).map(normalizeListItem);
   },
 
   getBestProducts: async (): Promise<Product[]> => {
-    const res = await http.get<PagedProductsResponse>(
-      `${STORE}/products?page=1&pageSize=3&sortBy=Rating&sortDir=Desc`
-    );
-    return res.data.items;
+    const res = await http.get<PagedProductsResponse>(`${STORE}/products?page=1&pageSize=3&sortBy=Rating&sortDir=Desc`);
+    return (res.data.items ?? []).map(normalizeListItem);
   },
 
   getById: async (id: string): Promise<ProductDetail> => {
-    const urls = [
-      `${STORE}/products/${encodeURIComponent(id)}`,
-      `${PRODUCT}/${encodeURIComponent(id)}`
+    const bust = `t=${Date.now()}`;
+    const candidates = [
+      `${PRODUCT}/${encodeURIComponent(id)}?${bust}`,
+      `${PRODUCT}?id=${encodeURIComponent(id)}&${bust}`,
+      `${PRODUCT}/details/${encodeURIComponent(id)}?${bust}`,
+      `${PRODUCT}/get/${encodeURIComponent(id)}?${bust}`,
     ];
-    let lastErr: any;
-    for (const url of urls) {
+    let lastErr: any = null;
+    for (const url of candidates) {
       try {
         const res = await http.get<any>(url);
-        if (res?.data) return normalizeDetail(res.data);
+        const r: any = res;
+        const payload = r?.data ?? r?.result ?? r?.value ?? r?.item ?? r?.product ?? null;
+        if (payload) return normalizeDetail(r);
       } catch (e) {
         lastErr = e;
       }
@@ -161,14 +224,33 @@ export const ProductService = {
   },
 
   create: async (draft: ProductDraft): Promise<Product> => {
-    const duplicated = await ProductService.existsByTitleAndCategory(
-      draft.title,
-      draft.categoryId ?? draft.category
-    );
+    const duplicated = await ProductService.existsByTitleAndCategory(draft.title, draft.categoryId ?? draft.category);
     if (duplicated) throw new Error("Product already exists in this category.");
     const payload = mapDraftToApi(draft);
-    // Use POST /api/product endpoint
     const res = await http.post<Product>(`${PRODUCT}`, payload);
-    return res.data;
+    return normalizeListItem(deepUnwrap(res.data));
+  },
+
+  search: async (p: SearchParams): Promise<PagedProductsResponse> => {
+    const page = p.page ?? 1;
+    const pageSize = p.pageSize ?? 24;
+    const q = p.q?.trim() ? `&title=${encodeURIComponent(p.q.trim())}` : "";
+    const cat = (p.categoryId || p.category)?.trim() ? `&category=${encodeURIComponent((p.categoryId || p.category) as string)}` : "";
+    const min = typeof p.min === "number" ? `&minPrice=${p.min}` : "";
+    const max = typeof p.max === "number" ? `&maxPrice=${p.max}` : "";
+    const sort = mapSort(p.sort);
+    const sortBy = sort.sortBy ? `&sortBy=${sort.sortBy}` : "";
+    const sortDir = sort.sortDir ? `&sortDir=${sort.sortDir}` : "";
+    const url = `${STORE}/products?page=${page}&pageSize=${pageSize}${q}${cat}${min}${max}${sortBy}${sortDir}`;
+    const res = await http.get<PagedProductsResponse>(url);
+    const items = Array.isArray(res.data?.items) ? res.data.items.map(normalizeListItem) : [];
+    return { ...res.data, items };
   },
 };
+
+export const toGridProduct = (p: Product) => ({
+  id: p.id,
+  name: p.title,
+  imageUrl: p.image,
+  price: p.price,
+});

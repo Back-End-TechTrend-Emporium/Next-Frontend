@@ -1,5 +1,12 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+} from "react";
 import { usePathname } from "next/navigation";
 import { CartService, type Cart } from "@/components/lib/CartService";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -33,19 +40,37 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   const refresh = useCallback(async () => {
-    const data = await CartService.getMine();
-    setCart(data);
+    try {
+      const data = await CartService.getActive();
+      setCart(data);
+    } catch {
+      setCart(null);
+    }
   }, []);
 
-  const addItem = useCallback(async (productId: string, qty = 1) => {
-    const data = await CartService.addItem(productId, qty);
-    if (data) setCart(data);
-  }, []);
+  const addItem = useCallback(
+    async (productId: string, qty = 1) => {
+      try {
+        const data = await CartService.addItem(productId, qty);
+        setCart(data ?? null);
+      } catch {
+        await refresh();
+      }
+    },
+    [refresh]
+  );
 
-  const removeItem = useCallback(async (productId: string) => {
-    const data = await CartService.removeItem(productId);
-    if (data) setCart(data);
-  }, []);
+  const removeItem = useCallback(
+    async (productId: string) => {
+      try {
+        const data = await CartService.removeItem(productId);
+        setCart(data ?? null);
+      } catch {
+        await refresh();
+      }
+    },
+    [refresh]
+  );
 
   useEffect(() => {
     const onLogin = pathname?.startsWith("/login");
@@ -58,6 +83,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [pathname, user?.role, refresh]);
 
-  const value = useMemo(() => ({ cart, refresh, addItem, removeItem }), [cart, refresh, addItem, removeItem]);
+  const value = useMemo(
+    () => ({ cart, refresh, addItem, removeItem }),
+    [cart, refresh, addItem, removeItem]
+  );
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
