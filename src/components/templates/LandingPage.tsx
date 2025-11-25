@@ -1,74 +1,48 @@
-// src/templates/LandingPage.tsx
 "use client";
-
+import { memo } from "react";
 import Carousel from "../molecules/Carousel";
-import CategoryGrid, { Category } from "../molecules/CategoryGrid";
-import ProductGrid, { Product } from "../molecules/ProductGrid";
+import CategoryGrid, { type Category } from "../molecules/CategoryGrid";
+import ProductGrid, { type Product } from "../molecules/ProductGrid";
+import Footer from "../organisms/Footer";
 
-export default function LandingPage({
-  bannerSource,
-  categories,
-  latest,
-  bestSellers,
-}: {
+export type LandingPageProps = {
   bannerSource: string;
   categories: Category[];
   latest: Product[];
   bestSellers: Product[];
-}) {
+};
+
+function LandingPageComponent({
+  bannerSource,
+  categories,
+  latest,
+  bestSellers,
+}: LandingPageProps) {
+  const showCategories = categories.length > 0;
+  const showLatest = latest.length > 0;
+  const showBestSellers = bestSellers.length > 0;
+
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      {/* Hero / Banner */}
-      <section className="pt-4 lg:pt-6">
-        <Carousel source={bannerSource} />
+    <main className="flex flex-col gap-12 pb-20">
+      <section className="bg-neutral-100">
+        <div className="mx-auto w-full max-w-6xl px-4 py-6">
+          <Carousel source={bannerSource} />
+        </div>
       </section>
 
-      {/* Categories */}
-      <section className="mt-10">
-        {categories?.length ? (
-          <CategoryGrid categories={categories} />
-        ) : (
-          <EmptyBlock title="No categories to show yet" hint="We’re curating the best tech for you." />
-        )}
-      </section>
+      {showCategories && <CategoryGrid categories={categories} />}
 
-      {/* Latest */}
-      <section className="mt-12">
-        {latest?.length ? (
-          <ProductGrid title="Our latest arrivals" products={latest} withFavorites />
-        ) : (
-          <EmptyBlock title="No new arrivals yet" hint="Check back soon for fresh drops." />
-        )}
-      </section>
+      {showLatest && (
+        <ProductGrid title="Latest arrivals" products={latest} />
+      )}
 
-      {/* Best Sellers / All Products */}
-      <section className="my-12">
-        {bestSellers?.length ? (
-          <ProductGrid title="Our products" products={bestSellers} withFavorites />
-        ) : (
-          <EmptyBlock title="No products available" hint="We’ll restock shortly." />
-        )}
-      </section>
+      {showBestSellers && (
+        <ProductGrid title="Best sellers" products={bestSellers} />
+      )}
+
+      <Footer />
     </main>
   );
 }
 
-/** Pequeño bloque reutilizable para estados vacíos */
-function EmptyBlock({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
-      <h3 className="text-lg font-semibold">{title}</h3>
-      {hint && <p className="mt-1 text-sm text-neutral-500">{hint}</p>}
-      {/* Skeleton simple para mantener layout estable */}
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="animate-pulse rounded-lg border border-neutral-200 p-4">
-            <div className="h-28 w-full rounded-md bg-neutral-200" />
-            <div className="mt-3 h-4 w-3/4 rounded bg-neutral-200" />
-            <div className="mt-2 h-4 w-1/2 rounded bg-neutral-200" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+export default memo(LandingPageComponent);

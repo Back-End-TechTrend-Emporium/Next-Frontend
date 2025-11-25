@@ -1,12 +1,10 @@
 "use client";
 import Header from "@/components/organisms/Header";
-import { useFavorites } from "@/components/context/FavoritesContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import type { UserLike } from "@/components/molecules/UserDropdown";
 
 export default function HeaderShell() {
-  const { items } = useFavorites();
   const { user: authUser } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -34,7 +32,6 @@ export default function HeaderShell() {
       currency="USD"
       user={user}
       cartCount={3}
-      wishlistCount={items.length}
       onSearch={(q: string) =>
         router.push(`/products${q ? `?q=${encodeURIComponent(q)}` : ""}`)
       }
