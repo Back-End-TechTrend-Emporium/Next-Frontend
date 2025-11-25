@@ -1,4 +1,3 @@
-// src/app/product/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,24 +9,53 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { useCart } from "@/components/context/CartContext";
 import { ProductDetail, ProductService } from "@/components/lib/ProductService";
 
+function toBool(v: any) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v.trim().toLowerCase() === "true";
+  if (typeof v === "number") return v !== 0;
+  return false;
+}
+
+function computeAvailable(p: any) {
+  if (!p) return false;
+  const flags = [
+    p.isInStock,
+    p.available,
+    p.inStock,
+    typeof p.isOutOfStock !== "undefined" ? !toBool(p.isOutOfStock) : undefined,
+  ];
+  for (const f of flags) if (typeof f !== "undefined") return toBool(f);
+  const inv = Number(
+    p.inventoryAvailable ?? p.availableInventory ?? p.inventory ?? p.stock ?? 0
+  );
+  return inv > 0;
+}
+
 export default function Page() {
   const router = useRouter();
   const { id: rawId } = useParams() as { id?: string | string[] };
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const { user } = useAuth();
   const { isFavorite, toggle } = useFavorites();
-  const { addItem, loading: adding, error: cartErr } = useCart();
+  const { addItem } = useCart();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [cartErr, setCartErr] = useState<string | null>(null);
 
-  const fmt = useMemo(() => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }), []);
+  const fmt = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }),
+    []
+  );
 
   useEffect(() => {
     let active = true;
     if (!id) {
       setLoading(false);
+      setError("Invalid product id");
       return;
     }
     setLoading(true);
@@ -53,7 +81,21 @@ export default function Page() {
       router.push(`/login?from=/product/${id}`);
       return;
     }
-    await addItem(id, 1);
+    try {
+      setAdding(true);
+      setCartErr(null);
+      const fresh = await ProductService.getById(id);
+      setProduct(fresh);
+      if (!computeAvailable(fresh)) {
+        setCartErr("This item is out of stock");
+        return;
+      }
+      await addItem(id, 1);
+    } catch (e: any) {
+      setCartErr(e?.message || "Error adding to cart");
+    } finally {
+      setAdding(false);
+    }
   };
 
   if (loading) return <div className="p-8">Loading…</div>;
@@ -67,6 +109,8 @@ export default function Page() {
     );
 
   if (!product) return null;
+
+  const available = computeAvailable(product);
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -83,12 +127,41 @@ export default function Page() {
         </div>
         <div className="space-y-4">
           <h1 className="text-2xl font-semibold">{product.title}</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold">
+              {fmt.format(product.price)}
+            </span>
+            {!available ? (
+              <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
+                Out of stock
+              </span>
+            ) : (product as any).isLowStock ? (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
+                Low stock
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
+                In stock
+              </span>
+            )}
+          </div>
           <p className="text-zinc-600">{product.description}</p>
-          <div className="text-2xl font-bold">{fmt.format(product.price)}</div>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={onAdd} disabled={adding}>{adding ? "Adding..." : "Add to cart"}</Button>
+            <Button
+              onClick={onAdd}
+              disabled={adding || !available}
+              aria-disabled={adding || !available}
+            >
+              {available
+                ? adding
+                  ? "Adding..."
+                  : "Add to cart"
+                : "Unavailable"}
+            </Button>
             <Button onClick={() => toggle(product.id)}>
-              {isFavorite(product.id) ? "Remove from wishlist" : "Add to wishlist"}
+              {isFavorite(product.id)
+                ? "Remove from wishlist"
+                : "Add to wishlist"}
             </Button>
           </div>
           {cartErr && <div className="text-sm text-red-600">{cartErr}</div>}
