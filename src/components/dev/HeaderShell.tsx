@@ -23,7 +23,7 @@ export default function HeaderShell() {
           if (r.includes("admin")) return "admin";
           if (r.includes("employee")) return "employee";
           return "shopper";
-        })()
+        })(),
       }
     : null;
 
@@ -35,7 +35,9 @@ export default function HeaderShell() {
       user={user}
       cartCount={3}
       wishlistCount={items.length}
-      onSearch={() => {}}
+      onSearch={(q: string) =>
+        router.push(`/products${q ? `?q=${encodeURIComponent(q)}` : ""}`)
+      }
       onGoToCart={() => router.push("/my-orders")}
       onGoToWishlist={() => router.push("/favorites")}
       onSelectCurrency={() => {}}
