@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export default function RequireRole({
   children,
@@ -13,6 +14,7 @@ export default function RequireRole({
   roles: string[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, ready } = useAuth();
 
   // Normalize role comparison (case-insensitive)
@@ -22,10 +24,16 @@ export default function RequireRole({
 
   // Perform navigation after render phase to avoid setState during render
   useEffect(() => {
-    if (ready && user && !hasRole) {
+    if (!ready) return;
+    if (!user) {
+      const from = typeof pathname === "string" ? `?from=${encodeURIComponent(pathname)}` : "";
+      router.replace(`/login${from}`);
+      return;
+    }
+    if (!hasRole) {
       router.replace("/");
     }
-  }, [ready, user, hasRole, router]);
+  }, [ready, user, hasRole, router, pathname]);
 
   // While auth is loading, or redirecting, render nothing
   if (!ready) return null;
