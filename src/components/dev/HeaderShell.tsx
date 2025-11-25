@@ -31,7 +31,7 @@ function HeaderShellImpl() {
       avatarUrl: authUser.avatarUrl,
       role,
     };
-  }, [authUser?.id, authUser?.name, authUser?.avatarUrl, authUser?.role]);
+  }, [authUser]);
 
   const handleSearch = useCallback(
     (q: string) =>
