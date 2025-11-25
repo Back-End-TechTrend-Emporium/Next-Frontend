@@ -63,7 +63,7 @@ export default function Page() {
     if (submitting) return;
     setCheckoutError(null);
     if (!address.trim()) {
-      setCheckoutError("Ingresa una dirección");
+      setCheckoutError("Please enter an address");
       return;
     }
     setSubmitting(true);
